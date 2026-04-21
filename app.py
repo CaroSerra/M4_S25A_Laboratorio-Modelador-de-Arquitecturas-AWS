@@ -1,8 +1,9 @@
 import streamlit as st 
 import pandas as pd 
- 
-st.set_page_config(page_title="Modelador AWS para IA", layout="wide") 
- 
+
+st.set_page_config(page_title="Modelador AWS para IA - v2", layout="wide") 
+
+# --- CASO BASE ---
 CASO_BASE = { 
     "sector": "Asegurador", 
     "documentos_diarios": 18000, 
@@ -14,187 +15,160 @@ CASO_BASE = {
     "preferencia_estrategica": "Gestionado", 
     "disponibilidad_objetivo": "Alta", 
 } 
- 
- 
-def recomendar_inferencia(preferencia_estrategica): 
+
+# --- LÓGICA DE NEGOCIO (REGLAS DE DECISIÓN) ---
+
+def recomendar_inferencia(preferencia_estrategica, pii): 
+    # CAMBIO: La seguridad ahora prima sobre la preferencia estratégica.
+    # Si hay PII, SageMaker es más robusto para aislamiento, o Bedrock requiere VPC Endpoints.
+    if pii and preferencia_estrategica == "Control fino":
+        return "Amazon SageMaker (Aislamiento total y control de VPC)"
     if preferencia_estrategica == "Gestionado": 
-        return "Amazon Bedrock" 
-    return "SageMaker" 
- 
- 
+        return "Amazon Bedrock (Serverless - Mayor agilidad)" 
+    return "Amazon SageMaker" 
+
 def recomendar_seguridad(pii): 
     if pii: 
         return ( 
-            "Controles reforzados: minimización de datos, revisión " 
-            "humana, cumplimiento y segmentación." 
+            "Capa de anonimización (Lambda), encriptación KMS y " 
+            "aislamiento mediante AWS PrivateLink." 
         ) 
-    return "Controles estándar de acceso y gobierno." 
- 
- 
+    return "Controles estándar de IAM y Service Control Policies." 
+
 def recomendar_observabilidad(variabilidad_demanda): 
+    # CAMBIO: Se enfoca en métricas específicas de IA (tokens y latencia).
     if variabilidad_demanda == "Alta": 
-        return ( 
-            "Alertas automáticas de coste y monitoreo reforzado de " 
-            "inferencia." 
-        ) 
-    if variabilidad_demanda == "Media": 
-        return "Monitoreo continuo con revisión periódica de consumo." 
-    return "Observabilidad básica y revisión mensual." 
- 
- 
-def generar_tradeoff(preferencia_estrategica): 
+        return "Amazon CloudWatch con métricas personalizadas de tokens y alertas FinOps en tiempo real." 
+    return "Monitoreo estándar de infraestructura y costes mensuales." 
+
+def generar_tradeoff(preferencia_estrategica, pii): 
+    if pii and preferencia_estrategica == "Gestionado":
+        return "EQUILIBRIO CRÍTICO: Se busca rapidez (Bedrock) pero con alta carga en gobierno de datos y privacidad."
     if preferencia_estrategica == "Gestionado": 
-        return ( 
-            "Se prioriza velocidad de lanzamiento y simplicidad " 
-            "operativa frente a control fino." 
-        ) 
-    return ( 
-        "Se prioriza control fino y personalización frente a rapidez " 
-        "de despliegue." 
-    ) 
- 
- 
+        return "Simplicidad operativa y Time-to-Market optimizado." 
+    return "Control total sobre el modelo y la infraestructura a costa de mayor complejidad técnica." 
+
 def generar_capas(datos): 
+    # CAMBIO: Se introduce el concepto de RAG y base de datos vectorial.
     capas = { 
         "Datos": ( 
-            "Repositorio documental y fuentes internas del área de " 
-            "siniestros." 
+            "S3 (Documentos) + Amazon Kendra o OpenSearch (Base Vectorial para RAG)." 
         ), 
-        "Integración": ( 
-            "Flujos de entrada/salida y orquestación entre documentos, " 
-            "consultas y motor de recomendación."
+        "Integración/Orquestación": ( 
+            "LangChain o AWS Step Functions para flujo de consulta y limpieza de PII."
              ), 
         "Inferencia/Modelo": recomendar_inferencia( 
-            datos["preferencia_estrategica"] 
+            datos["preferencia_estrategica"], datos["pii"]
         ), 
-        "Aplicación": "Interfaz interna para gestores y analistas.", 
-        "Seguridad y Gobierno": recomendar_seguridad(datos["pii"]), 
-        "Observabilidad y FinOps": recomendar_observabilidad( 
-            datos["variabilidad_demanda"] 
-        ), 
+        "Aplicación": "Frontend en Streamlit/CloudFront para gestores de siniestros.", 
+        "Seguridad": recomendar_seguridad(datos["pii"]), 
+        "FinOps": recomendar_observabilidad(datos["variabilidad_demanda"]), 
     } 
     return capas 
- 
- 
+
 def generar_riesgos(datos): 
+    # CAMBIO: Se añaden riesgos reales de IA (Alucinaciones) y su mitigación (RAG).
     riesgos = [ 
         { 
-            "Riesgo": "Exposición de datos personales sensibles", 
-            "Alternativa/Mitigación": ( 
-                "Minimización de datos, revisión humana y control de acceso" 
-            ), 
-            "Gobernanza": "Compliance + Responsable de Seguridad", 
-            "Acción": "Validar tratamiento de PII antes del despliegue", 
+            "Riesgo": "Alucinaciones en borradores", 
+            "Alternativa/Mitigación": "Arquitectura RAG y validación 'Human-in-the-loop'", 
+            "Gobernanza": "Product Owner / Negocio", 
+            "Acción": "Implementar umbrales de confianza en el modelo", 
         }, 
         { 
-            "Riesgo": "Latencia superior al objetivo", 
-            "Alternativa/Mitigación": ( 
-                "Optimizar flujo y monitorear tiempos de respuesta" 
-            ), 
-            "Gobernanza": "Arquitecto SI/TI", 
-            "Acción": "Definir pruebas de rendimiento", 
+            "Riesgo": "Exposición de PII", 
+            "Alternativa/Mitigación": "Detección con Amazon Macie y filtrado previo", 
+            "Gobernanza": "CISO / Compliance", 
+            "Acción": "Auditoría de logs antes de producción", 
         }, 
         { 
-            "Riesgo": "Sobrecoste de inferencia", 
-            "Alternativa/Mitigación": ( 
-                "Alertas de consumo y revisión de uso" 
-            ), 
-            "Gobernanza": "FinOps / Responsable de Operación", 
-            "Acción": "Revisar consumo periódicamente", 
+            "Riesgo": "Latencia en concurrencia", 
+            "Alternativa/Mitigación": "Provisioned Throughput (Bedrock) / Autoscaling", 
+            "Gobernanza": "Arquitecto Cloud", 
+            "Acción": "Pruebas de carga con 220 usuarios", 
         }, 
     ] 
     return pd.DataFrame(riesgos) 
- 
- 
+
 def generar_slos(datos): 
     slos = [ 
         { 
-            "Indicador": "Latencia máxima objetivo", 
-            "Valor propuesto": f"<={datos['latencia_max_seg']} s", 
+            "Indicador": "Latencia máxima", 
+            "Valor propuesto": f"<={datos['latencia_max_seg']} s (p99)", 
         }, 
         { 
-            "Indicador": "Disponibilidad objetivo", 
+            "Indicador": "Exactitud de respuesta", 
+            "Valor propuesto": ">95% (Validación contra Base de Conocimiento)", 
+        }, 
+        { 
+            "Indicador": "Disponibilidad", 
             "Valor propuesto": datos["disponibilidad_objetivo"], 
-        }, 
-        { 
-            "Indicador": "Tasa de escalado a humano", 
-            "Valor propuesto": ( 
-                "Definir umbral para casos ambiguos o sensibles" 
-            ), 
         }, 
     ] 
     return pd.DataFrame(slos) 
- 
- 
-st.sidebar.header("Parámetros de entrada") 
- 
+
+# --- INTERFAZ (INPUTS) ---
+
+st.sidebar.header("Configuración del Sistema") 
+
 sector = st.sidebar.text_input("Sector", CASO_BASE["sector"]) 
 documentos_diarios = st.sidebar.number_input( 
     "Documentos diarios", min_value=0, value=CASO_BASE["documentos_diarios"] 
 ) 
 usuarios_simultaneos = st.sidebar.number_input( 
- "Usuarios simultáneos", min_value=0, 
-    value=CASO_BASE["usuarios_simultaneos"] 
+ "Usuarios simultáneos", min_value=0, value=CASO_BASE["usuarios_simultaneos"] 
 ) 
 latencia_max_seg = st.sidebar.number_input( 
-    "Latencia máxima tolerada (segundos)", min_value=1, 
-    value=CASO_BASE["latencia_max_seg"] 
+    "Latencia objetivo (seg)", min_value=1, value=CASO_BASE["latencia_max_seg"] 
 ) 
 pii = st.sidebar.checkbox( 
-    "¿Hay datos personales sensibles (PII)?", value=CASO_BASE["pii"] 
+    "¿Contiene PII?", value=CASO_BASE["pii"] 
 ) 
 presupuesto = st.sidebar.selectbox( 
     "Presupuesto", ["Bajo", "Medio", "Alto"], index=1 
 ) 
 variabilidad_demanda = st.sidebar.selectbox( 
-    "Variabilidad de la demanda", ["Baja", "Media", "Alta"], index=1 
+    "Variabilidad", ["Baja", "Media", "Alta"], index=1 
 ) 
 preferencia_estrategica = st.sidebar.selectbox( 
-    "Preferencia estratégica", ["Gestionado", "Control fino"], index=0 
+    "Estrategia", ["Gestionado", "Control fino"], index=0 
 ) 
 disponibilidad_objetivo = st.sidebar.selectbox( 
-    "Disponibilidad objetivo", ["Media", "Alta", "Muy alta"], index=1 
+    "Disponibilidad", ["Media", "Alta", "Muy alta"], index=1 
 ) 
- 
+
 datos = { 
-    "sector": sector, 
-    "documentos_diarios": documentos_diarios, 
-    "usuarios_simultaneos": usuarios_simultaneos, 
-    "latencia_max_seg": latencia_max_seg, 
-    "pii": pii, 
-    "presupuesto": presupuesto, 
-    "variabilidad_demanda": variabilidad_demanda, 
-    "preferencia_estrategica": preferencia_estrategica, 
-    "disponibilidad_objetivo": disponibilidad_objetivo, 
+    "sector": sector, "documentos_diarios": documentos_diarios, 
+    "usuarios_simultaneos": usuarios_simultaneos, "latencia_max_seg": latencia_max_seg, 
+    "pii": pii, "presupuesto": presupuesto, "variabilidad_demanda": variabilidad_demanda, 
+    "preferencia_estrategica": preferencia_estrategica, "disponibilidad_objetivo": disponibilidad_objetivo, 
 } 
- 
-st.title("Modelador de Arquitecturas AWS para IA") 
-st.write("Propuesta inicial de arquitectura lógica basada en reglas simples.") 
- 
-st.subheader("1. Resumen ejecutivo") 
-st.write( 
-    f"Para el sector {datos['sector']}, la arquitectura propuesta prioriza " 
-    f"{'simplicidad y rapidez' if datos['preferencia_estrategica'] == 'Gestionado' else 
-'control y personalización'} " 
-    f"teniendo en cuenta latencia, sensibilidad del dato y operación." 
-) 
- 
-st.subheader("2. Arquitectura propuesta por capas") 
-capas = generar_capas(datos) 
-for capa, descripcion in capas.items(): 
-    st.markdown(f"**{capa}:** {descripcion}") 
- 
-st.subheader("3. Trade-off principal") 
-st.write(generar_tradeoff(datos["preferencia_estrategica"])) 
- 
-st.subheader("4. Matriz RAGA") 
-st.dataframe(generar_riesgos(datos), use_container_width=True) 
- 
-st.subheader("5. SLO/SLA propuestos") 
+
+# --- CONSTRUCCIÓN DEL MEMO (OUTPUTS) ---
+
+st.title("Reporte de Arquitectura IA: Asistente de Siniestros") 
+
+# Alerta de coherencia (Mejora didáctica)
+if datos["documentos_diarios"] > 15000 and datos["presupuesto"] == "Bajo":
+    st.warning("**Aviso de diseño**: El volumen de documentos es alto para un presupuesto bajo. Considere optimizar el índice vectorial.")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("1. Propuesta por Capas") 
+    capas = generar_capas(datos) 
+    for capa, descripcion in capas.items(): 
+        st.markdown(f"**{capa}:** {descripcion}") 
+
+with col2:
+    st.subheader("2. Trade-off Estratégico") 
+    st.info(generar_tradeoff(datos["preferencia_estrategica"], datos["pii"])) 
+
+st.subheader("3. Matriz de Riesgos y Mitigación") 
+st.table(generar_riesgos(datos)) # Uso de table para mejor lectura de riesgos
+
+st.subheader("4. Definición de SLOs") 
 st.dataframe(generar_slos(datos), use_container_width=True) 
- 
-st.subheader("6. Reflexión del equipo") 
-st.info( 
-    "Añadid aquí vuestra justificación final: " 
-    "¿qué decisión tomáis vosotros y por qué?" 
-) 
+
+st.subheader("5. Reflexión Final") 
+st.info("Justificad vuestra elección final: ¿Cómo equilibra esta arquitectura la latencia con la seguridad de los datos PII?")
